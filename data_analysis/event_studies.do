@@ -1,18 +1,33 @@
+/*
+Project: LARC reimbursement
+Description: This file creates event studies of the effect of unbundled LARC reimbursement on birth outcomes and LARC use
+Input:
+
+Output: PDFs of individual event study graphs stored in ${topdir}/`date'
+Date modified: May 4 2018
+Author: Marisa Carlos mbc96@cornell.edu
+*/
+clear
+capture log close 
 set seed 85718
 set more off 
 
+*************************** CHANGE THE DATE IF RUNNING NEW EVENT STUDIES SO YOU DONT WRITE OVER OLD ONES *************************************
+local date 2018_05_04
+**********************************************************************************************************************************************
 
-local date 2018_04_09 // Change date if running new event study graphs dont write over old ones 
-cd S:/LARC/event_study_graphs // path where event studies are stored 
-capture mkdir `date' // create new folder 
-cd `date'
+******************************************************* Set paths ****************************************************************************
+** Make sure \\tsclient\Dropbox (Personal) is mapped to B: drive (subst B: "\\tsclient\Dropbox (Personal)")
+global topdir "B:\Cornell\Research\Projects\LARC_Reimbursement\graphs\event_studies" // path to directory where event study graphs are stored
+global analysis_data_path "S:/LARC/data/analysis_data"
+global log_path "S:/LARC/log_files"
+**********************************************************************************************************************************************
 
 
-**** Set paths: 
-local analysis_data_path "S:/LARC/data/analysis_data"
-
-capture log close 
-log using "../event_studies_log_`date'.log", replace text
+cd "${topdir}"
+capture mkdir "`date'" // creates new folder for new date in event study graphs folder
+cd "`date'"
+log using "${log_path}/event_studies_log_`date'.log", replace text
 
 
 
@@ -44,9 +59,9 @@ foreach prefix of local birth_prefixes {
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		*display "S:\LARC\data\analysis_data\\`prefix'_`suffix'_`quarter_type'_C2.dta"
-		display "`analysis_data_path'/`prefix'_`suffix'_`quarter_type'_C2.dta"
+		display "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C2.dta"
 		*capture confirm file "S:\LARC\data\analysis_data\\`prefix'_`suffix'_`quarter_type'_C2.dta"
-		capture confirm file "`analysis_data_path'/`prefix'_`suffix'_`quarter_type'_C2.dta"
+		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C2.dta"
 		
 		if _rc==0 {
 			local quarter_datasets_order_two_plus `quarter_datasets_order_two_plus' `prefix'_`suffix'_`quarter_type'_C2
@@ -60,9 +75,9 @@ foreach prefix of local birth_prefixes {
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		*display "S:\LARC\data\analysis_data\\`prefix'_`suffix'_C2.dta"
-		display "`analysis_data_path'/`prefix'_`suffix'_C2.dta"
+		display "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
 		*capture confirm file "S:\LARC\data\analysis_data\\`prefix'_`suffix'_C2.dta"
-		capture confirm file "`analysis_data_path'/`prefix'_`suffix'_C2.dta"
+		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
 		if _rc==0 {
 			local month_datasets_order_two_plus `month_datasets_order_two_plus' `prefix'_`suffix'_C2
 			local ++count
@@ -96,7 +111,7 @@ foreach birth_order in order_any order_two_plus {
 			display "DATASET ORIGINAL NAME: `dataset_orig'"
 			display "--------------------------------------------------"
 			display "--------------------------------------------------"
-			use "`analysis_data_path'/`dataset_orig'.dta", clear
+			use "${analysis_data_path}/`dataset_orig'.dta", clear
 			
 			*** Generate a dataset local that takes the C2 off of the end of the dataset name:
 			*** Only need to do this if `birth_order'=order_two_plus
