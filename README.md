@@ -1,2 +1,2 @@
 # LARC
-Code for LARC projects
+Codes for LARC project
