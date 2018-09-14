@@ -10,6 +10,9 @@ Date modified: May 4, 2018
 Author: Marisa Carlos (mbc96@cornell.edu)
 
 Unresolved issues: Need to figure out what the difference is between units and num_rx;
+
+NOTE: As of 5/2018, this file is NOT being used b/c of inability to use CMS state drug utilization files to accurately measure LARC use 
+(dont include 340b providers, etc.)
 ***************************************************************************************************************************************/
 
 **** Create subset of state utilization data that is JUST the IUDs and implant;
