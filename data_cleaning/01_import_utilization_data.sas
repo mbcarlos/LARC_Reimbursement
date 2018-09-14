@@ -7,6 +7,9 @@ Output:
 	SAS formatted state drug utilization data in util library
 Date modified: May 4, 2018
 Author: Marisa Carlos (mbc96@cornell.edu)
+
+NOTE: As of 5/2018, this file is NOT being used b/c of inability to use CMS state drug utilization files to accurately measure LARC use 
+(dont include 340b providers, etc.)
 ***************************************************************************************************************************************/
 
 %macro import_drug_data(syear=,eyear=);
