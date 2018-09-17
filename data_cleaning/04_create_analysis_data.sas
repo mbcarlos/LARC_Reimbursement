@@ -1,18 +1,18 @@
 /***************************************************************************************************************************************
 Project: LARC reimbursement 
-Description: This file reads in the LARC policy data and merges it with LARC utilization data (CMS SDUD) and vital statistics data to 
+Description: This file reads in the LARC policy data and merges it with vital statistics data to 
 create .dta files for analysis. 
 Input: 
 	SAS formatted birth data in WORK library
-	SAS formatted SDUD (quarterly) from util library
+	LARC policy spreadsheet (&larc_policy_spreadsheet_path.)
 Output: 
 	anlaysis data files (.dta) stored in &save_stata_data_path.
-Date modified: May 4, 2018
+Date modified: September 14, 2018
 Author: Marisa Carlos (mbc96@cornell.edu)
 ***************************************************************************************************************************************/
 
-*** Upload LARC policies info;
-data WORK.STATE_LARC_POLICIES    ;
+*** Read in LARC policy info;
+data state_larc_policies    ;
 	%let _EFIERR_ = 0; /* set the ERROR detection macro variable */
 	infile "&larc_policy_spreadsheet_path." delimiter = ',' MISSOVER DSD lrecl=32767 firstobs=2 ;
 
@@ -122,25 +122,19 @@ quit;
 %larc_policies;
 
 
+******************************************************************************************************************************
+********************************************* Merge LARC policy info with MONTHLY birth data**********************************
+******************************************************************************************************************************;
+*%let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
+*%let suffixes = black hispanic teen total unmarried;
 
-*** Merge LARC policy info with MONTHLY birth data;
-%let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
-%let suffixes = black hispanic teen total unmarried;
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let prefixes = lbw natality;
+%let suffixes = teen total unmarried;
 %macro merge_birth_policies;
 %do i = 1 %to %sysfunc(countw(&prefixes.));
 	%let prefix = %scan(&prefixes., &i.);
-	%let larc_date_suffix = _8molag;
-	/*
-	%if &prefix. = lbw %then %do;
-		%let larc_date_suffix = _9molag;
-	%end;
-	%else %if %substr(&prefix.,1,4)=lt37 %then %do;
-		%let larc_date_suffix = _8molag;
-	%end;
-	%else %do;
-		%let larc_date_suffix = _9molag;
-	%end;
-	*/
+	%let larc_date_suffix = _9molag;
 
 	%do j = 1 %to %sysfunc(countw(&suffixes.));
 		%let suffix = %scan(&suffixes., &j.);
@@ -195,113 +189,16 @@ quit;
 
 
 
+******************************************************************************************************************************
+********************************************* Merge LARC policy info with QUARTERLY birth data**********************************
+******************************************************************************************************************************;
 
-*** Merge LARC policy data with LARC utilization data;
-*** Create date variable for LARC utilization dataset;
-***LARC data is at the QUARTER level - need to make a decision about when to turn the policy "ON" - if state starts covering LARC in 
-february, do we say that "separate_device payemt" = 1 for quarter 1? Or is it 0?;
-
-%macro merge_util_policy_data(syear=,eyear=);
-*** Create variable for first day of quarter and last day of quarter;
-proc sql noprint;
-	create table larc_util_data(drop=year state quarter rename=(state_l=state year_l=year quarter_l=quarter)) as 
-		select *,
-		case
-			when quarter_l=1 then mdy(1,1,year_l)
-			when quarter_l=2 then mdy(4,1,year_l)
-			when quarter_l=3 then mdy(7,1,year_l)
-			when quarter_l=4 then mdy(10,1,year_l)
-		end as firstday_q format=mmddyy10.,
-		case
-			when quarter_l=1 then mdy(3,31,year_l)
-			when quarter_l=2 then mdy(6,30,year_l)
-			when quarter_l=3 then mdy(9,30,year_l)
-			when quarter_l=4 then mdy(12,31,year_l)
-		end as lastday_q format=mmddyy10.
-			from util.larc_state_year_q_&syear.to&eyear.;
-quit;
-
-
-proc sql noprint;
-	select count(*) into :count_a from larc_util_data;
-	select count(*) into :count_b from state_larc_policies;
-
-	create table savedata.larc_util_fdq(drop=date_enacted_: date_ended_: month_enacted_code month_ended_code) as 
-		select *
-			from larc_util_data as a
-			inner join state_larc_policies as b
-				on (a.firstday_q >= b.date_enacted AND a.firstday_q <= b.date_ended
-				AND upcase(strip(a.state))=upcase(strip(b.state_short)))
-				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
-				AND b.policy_num=1 AND a.firstday_q < b.date_enacted);
-
-	select count(*) into :countmerge_a from savedata.larc_util_fdq;
-
-	create table savedata.larc_util_ldq(drop=date_enacted_: date_ended_: month_enacted_code month_ended_code) as 
-		select *
-			from larc_util_data as a
-			inner join state_larc_policies as b
-				on (a.lastday_q >= b.date_enacted AND a.lastday_q <= b.date_ended
-				AND upcase(strip(a.state))=upcase(strip(b.state_short)))
-				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
-				AND b.policy_num=1 AND a.lastday_q < b.date_enacted);
-
-	select count(*) into :countmerge_b from savedata.larc_util_ldq;
-quit;
-%put -------------------------------------------------------------------------------;
-%put COUNT IN larc_util_data (a): &count_a.;
-%put COUNT IN state larc policies (b): &count_b.;
-%put MERGE COUNT (first day): &countmerge_a.;
-%put MERGE COUNT (last day): &countmerge_b.;
-%put -------------------------------------------------------------------------------;
-
-proc sql noprint;
-	create table savedata.larc_util_fdq as 
-		select *,
-		case
-			when upcase(device_payment_type) contains "S" AND date_enacted<=firstday_q<=date_ended then 1
-			else 0
-		end as separate_device_reimb,
-		case
-			when upcase(insertion_payment_type) contains "S" AND date_enacted<=firstday_q<=date_ended then 1
-			else 0
-		end as separate_insert_reimb
-			from savedata.larc_util_fdq;
-
-	create table savedata.larc_util_ldq as 
-		select *,
-		case
-			when upcase(device_payment_type) contains "S" AND date_enacted<=lastday_q<=date_ended then 1
-			else 0
-		end as separate_device_reimb,
-		case
-			when upcase(insertion_payment_type) contains "S" AND date_enacted<=lastday_q<=date_ended then 1
-			else 0
-		end as separate_insert_reimb
-			from savedata.larc_util_ldq;
-quit;
-
-*** Export to stata;
-proc export data=savedata.larc_util_ldq outfile="&save_stata_data_path.larc_util_ldq.dta"
-replace;
-quit;
-
-proc export data=savedata.larc_util_fdq outfile="&save_stata_data_path.larc_util_fdq.dta"
-replace;
-quit;
-%mend merge_util_policy_data;
-%merge_util_policy_data(syear=2009,eyear=2017);
-
-
-
-
-*** Merge policy info into the QUARTERLY birth data;
-%let prefixes = natality lbw lt37weeks_lmp lt37weeks_oe;
-%let suffixes = total black hispanic teen unmarried;
+%let prefixes = natality lbw;
+%let suffixes = total teen unmarried hsorless;
 %macro merge_quarter_birth_data;
 %do i = 1 %to %sysfunc(countw(&prefixes.));
 	%let prefix = %scan(&prefixes., &i.);
-	%let larc_date_suffix = _8molag;
+	%let larc_date_suffix = _9molag;
 
 	%do j = 1 %to %sysfunc(countw(&suffixes.));
 		%let suffix = %scan(&suffixes., &j.);
@@ -372,8 +269,8 @@ quit;
 Merge LARC policy info with the monthly birth data for 2nd child +
 ************************************************************************************************************************************;
 
-%let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
-%let suffixes = black hispanic teen total unmarried;
+%let prefixes = lbw natality;
+%let suffixes = teen total unmarried;
 %macro merge_birth_policies_childtwo;
 proc sql noprint;
 	create table work_datasets as 
@@ -448,8 +345,8 @@ quit;
 ************************************************************************************************************************************
 Merge LARC policy info with the quarterly birth data for 2nd child +
 ************************************************************************************************************************************;
-%let prefixes = natality lbw lt37weeks_lmp lt37weeks_oe;
-%let suffixes = total black hispanic teen unmarried;
+%let prefixes = natality lbw;
+%let suffixes = total teen unmarried hsorless;
 %macro merge_quarter_childtwo;
 proc sql noprint;
 	create table work_datasets as 

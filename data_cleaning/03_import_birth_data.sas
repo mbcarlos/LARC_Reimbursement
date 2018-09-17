@@ -5,14 +5,20 @@ Input:
 	birth data .txt files from S:\LARC\data\raw_data\birth_data
 Output: 
 	SAS formatted raw birth data stored in the WORK library (turned into .dta files in 04_create_analysis_dta.sas)
-Date modified: May 4, 2018
+Date modified: September 14, 2018
 Author: Marisa Carlos (mbc96@cornell.edu)
 ***************************************************************************************************************************************/
 
+/*
 %let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
 %let suffixes = black hispanic teen total unmarried;
-
-
+*/
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let prefixes = lbw natality;
+%let suffixes = teen total unmarried;
+****************************************************************************************************************************************************
+********************************************* IMPORT MONTHLY BIRTH DATA (ALL BIRTH ORDERS) *********************************************************
+****************************************************************************************************************************************************;
 %macro import_birth_data(syear=,eyear=);
 %do i = 1 %to %sysfunc(countw(&prefixes.));
 	%let prefix = %scan(&prefixes., &i.);
@@ -36,7 +42,7 @@ Author: Marisa Carlos (mbc96@cornell.edu)
 		proc contents data = &prefix._&suffix.RAW out=contents nodetails noprint;
 		run;
 
-		%let varlist = births month_code state_code year;* average_birth_weight average_age_of_mother;
+		%let varlist = births month_code state_code year;
 		%do varnum = 1 %to %sysfunc(countw(&varlist.));
 			%let var = %scan(&varlist.,&varnum.);
 			proc sql noprint;
@@ -53,8 +59,7 @@ Author: Marisa Carlos (mbc96@cornell.edu)
 		proc sql noprint;
 			create table &prefix._&suffix.RAW as 
 				select &births_macro. as births, &month_code_macro. as month_code, &state_code_macro. as state_code, &year_macro. as year,
-				state, month, mdy(&month_code_macro.,1,&year_macro.) as month_year format=mmddyy10. /*,
-				&average_birth_weight_macro. as average_birth_weight , &average_age_of_mother_macro. as average_age_of_mother*/
+				state, month, mdy(&month_code_macro.,1,&year_macro.) as month_year format=mmddyy10.
 					from &prefix._&suffix.RAW
 						where births is not missing AND month is not missing ;
 		quit;
@@ -78,9 +83,15 @@ quit;
 %import_birth_data(syear=&first_year_birth_data.,eyear=&last_year_birth_data.);
 
 
-*** Import quarterly birth data;
-%let datasets = lbw_black lbw_hispanic lbw_teen lt37weeks_lmp_black lt37weeks_lmp_hispanic lt37weeks_lmp_teen 
+
+****************************************************************************************************************************************************
+******************************************* IMPORT QUARTERLY BIRTH DATA (ALL BIRTH ORDERS) *********************************************************
+****************************************************************************************************************************************************;
+
+*%let datasets = lbw_black lbw_hispanic lbw_teen lt37weeks_lmp_black lt37weeks_lmp_hispanic lt37weeks_lmp_teen 
 lt37weeks_oe_black lt37weeks_oe_hispanic lt37weeks_oe_teen natality_black natality_hispanic;
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let datasets = lbw_teen lbw_HSorless natality_HSorless; 
 %macro import_quarter_birth_data(syear=,eyear=);
 %do i = 1 %to %sysfunc(countw(&datasets.));
 	%let dataset = %scan(&datasets., &i.);
@@ -103,7 +114,7 @@ lt37weeks_oe_black lt37weeks_oe_hispanic lt37weeks_oe_teen natality_black natali
 		proc contents data = &dataset._q&q. out=contents nodetails noprint;
 		run;
 
-		%let varlist = births state_code year;* average_birth_weight average_age_of_mother;
+		%let varlist = births state_code year;
 		%do varnum = 1 %to %sysfunc(countw(&varlist.));
 			%let var = %scan(&varlist.,&varnum.);
 			proc sql noprint;
@@ -119,8 +130,7 @@ lt37weeks_oe_black lt37weeks_oe_hispanic lt37weeks_oe_teen natality_black natali
 
 		proc sql noprint;
 			create table &dataset._q&q. as 
-				select &births_macro. as births, &q. as quarter, &state_code_macro. as state_code, &year_macro. as year,
-				state /*, &average_birth_weight_macro. as average_birth_weight , &average_age_of_mother_macro. as average_age_of_mother*/
+				select &births_macro. as births, &q. as quarter, &state_code_macro. as state_code, &year_macro. as year, state
 					from &dataset._q&q.
 						where births is not missing;
 	
@@ -172,8 +182,15 @@ quit;
 
 
 
-%let rollup_datasets = lbw_total lbw_unmarried lt37weeks_lmp_total lt37weeks_lmp_unmarried lt37weeks_oe_total lt37weeks_oe_unmarried
+****************************************************************************************************************************************************
+**************************************************** ROLL UP BIRTH DATA (ALL BIRTH ORDERS) *********************************************************
+****************************************************************************************************************************************************;
+
+
+*%let rollup_datasets = lbw_total lbw_unmarried lt37weeks_lmp_total lt37weeks_lmp_unmarried lt37weeks_oe_total lt37weeks_oe_unmarried
 natality_teen natality_total natality_unmarried;
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let rollup_datasets = lbw_total lbw_unmarried natality_teen natality_total natality_unmarried;
 %macro rollup_birth_data;
 proc sql noprint;
 %do i = 1 %to %sysfunc(countw(&rollup_datasets.));
@@ -210,17 +227,7 @@ proc sql noprint;
 				when count(births)=3 then sum(births)
 				when count(births)~=3 then .
 				else .
-			end as births /*,
-			case
-				when count(births)=3 then sum(average_birth_weight*births)/sum(births)
-				when count(births)~=3 then .
-				else .
-			end as average_birth_weight,
-			case
-				when count(births)=3 then sum(average_age_of_mother*births)/sum(births)
-				when count(births)~=3 then .
-				else .
-			end as average_age_of_mother*/
+			end as births
 				from &dataset._q
 					group by firstday_q, lastday_q, quarter, year, state_code, state
 						order by state, year, quarter;
@@ -243,12 +250,17 @@ quit;
 %rollup_birth_data;
 
 
-*******************************************************************************************************************************************
-*** Import the monthly 2nd child birth data;
-*******************************************************************************************************************************************;
-
+****************************************************************************************************************************************************
+****************************************** IMPORT MONTHLY BIRTH DATA, 2nd+ BIRTH ORDER *************************************************************
+****************************************************************************************************************************************************;
+/*
 %let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
 %let suffixes = black hispanic teen total unmarried;
+*/
+
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let prefixes = lbw natality;
+%let suffixes = teen total unmarried;
 
 %macro import_monthly_data_secondchild(syear=,eyear=);
 %do i = 1 %to %sysfunc(countw(&prefixes.));
@@ -292,8 +304,7 @@ quit;
 			proc sql noprint;
 				create table &prefix._&suffix.RAW_C2 as 
 					select &births_macro. as births, &month_code_macro. as month_code, &state_code_macro. as state_code, &year_macro. as year,
-					state, month, mdy(&month_code_macro.,1,&year_macro.) as month_year format=mmddyy10. /*,
-					&average_birth_weight_macro. as average_birth_weight , &average_age_of_mother_macro. as average_age_of_mother*/
+					state, month, mdy(&month_code_macro.,1,&year_macro.) as month_year format=mmddyy10.
 						from &prefix._&suffix.RAW_C2
 							where births is not missing AND month is not missing ;
 			quit;
@@ -324,10 +335,12 @@ quit;
 
 
 
-*******************************************************************************************************************************************
-*** Import the quarterly 2nd child birth data;
-*******************************************************************************************************************************************;
-%let datasets = lt37weeks_oe_teen lt37weeks_lmp_hispanic lbw_hispanic natality_black lt37weeks_lmp_teen lbw_teen lt37weeks_oe_hispanic;
+****************************************************************************************************************************************************
+****************************************** IMPORT QUARTERLY BIRTH DATA, 2nd+ BIRTH ORDER ***********************************************************
+****************************************************************************************************************************************************;
+*%let datasets = lt37weeks_oe_teen lt37weeks_lmp_hispanic lbw_hispanic natality_black lt37weeks_lmp_teen lbw_teen lt37weeks_oe_hispanic;
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let datasets = lbw_teen lbw_HSorless natality_HSorless;
 %macro import_quarter_data_childtwo(syear=,eyear=);
 %do i = 1 %to %sysfunc(countw(&datasets.));
 	%let dataset = %scan(&datasets., &i.);
@@ -366,8 +379,7 @@ quit;
 
 		proc sql noprint;
 			create table &dataset._q&q._C2 as 
-				select &births_macro. as births, &q. as quarter, &state_code_macro. as state_code, &year_macro. as year,
-				state /*, &average_birth_weight_macro. as average_birth_weight , &average_age_of_mother_macro. as average_age_of_mother*/
+				select &births_macro. as births, &q. as quarter, &state_code_macro. as state_code, &year_macro. as year, state
 					from &dataset._q&q._C2
 						where births is not missing;
 	
@@ -417,9 +429,15 @@ quit;
 %mend import_quarter_data_childtwo;
 %import_quarter_data_childtwo(syear=&first_year_birth_data.,eyear=&last_year_birth_data.);
 
-******** Rollup the monthly data to the quarter level ********;
-%let C2_rollup_datasets = lt37weeks_oe_unmarried lbw_unmarried lt37weeks_lmp_total natality_total lbw_total natality_unmarried 
+
+
+****************************************************************************************************************************************************
+******************************************* ROLL UP MONTHLY TO QUARTERLY (2nd+ BIRTH ORDER) ********************************************************
+****************************************************************************************************************************************************;
+*%let C2_rollup_datasets = lt37weeks_oe_unmarried lbw_unmarried lt37weeks_lmp_total natality_total lbw_total natality_unmarried 
 lt37weeks_lmp_unmarried lt37weeks_oe_total natality_teen natality_hispanic;
+*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+%let C2_rollup_datasets = lbw_unmarried natality_total lbw_total natality_unmarried natality_teen;
 %macro rollup_birth_data_childtwo;
 proc sql noprint;
 %do i = 1 %to %sysfunc(countw(&C2_rollup_datasets.));
@@ -456,17 +474,7 @@ proc sql noprint;
 				when count(births)=3 then sum(births)
 				when count(births)~=3 then .
 				else .
-			end as births /*,
-			case
-				when count(births)=3 then sum(average_birth_weight*births)/sum(births)
-				when count(births)~=3 then .
-				else .
-			end as average_birth_weight,
-			case
-				when count(births)=3 then sum(average_age_of_mother*births)/sum(births)
-				when count(births)~=3 then .
-				else .
-			end as average_age_of_mother */
+			end as births
 				from &dataset._q_C2
 					group by firstday_q, lastday_q, quarter, year, state_code, state
 						order by state, year, quarter;
