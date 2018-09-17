@@ -3,8 +3,8 @@ Project: LARC reimbursement
 Description: This file creates event studies of the effect of unbundled LARC reimbursement on birth outcomes and LARC use
 Input:
 
-Output: PDFs of individual event study graphs stored in ${topdir}/`date'
-Date modified: May 4 2018
+Output: PDFs of individual event study graphs stored in ${topdir}/${S_DATE}
+Date modified: September 14 2018
 Author: Marisa Carlos mbc96@cornell.edu
 */
 clear
@@ -12,33 +12,34 @@ capture log close
 set seed 85718
 set more off 
 
-*************************** CHANGE THE DATE IF RUNNING NEW EVENT STUDIES SO YOU DONT WRITE OVER OLD ONES *************************************
-local date 2018_05_04
-**********************************************************************************************************************************************
+
 
 ******************************************************* Set paths ****************************************************************************
 ** Make sure \\tsclient\Dropbox (Personal) is mapped to B: drive (subst B: "\\tsclient\Dropbox (Personal)")
 global topdir "B:\Cornell\Research\Projects\LARC_Reimbursement\graphs\event_studies" // path to directory where event study graphs are stored
+*** If B: is mapped to Dropbox/Cornell/Research/Projects/LARC_Reimbursement:
+global topdir "B:\graphs\event_studies" // path to directory where event study graphs are stored
 global analysis_data_path "S:/LARC/data/analysis_data"
 global log_path "S:/LARC/log_files"
 **********************************************************************************************************************************************
 
-
+**** Event studies will be stored in a folder containing the CURRENT date. 
 cd "${topdir}"
-capture mkdir "`date'" // creates new folder for new date in event study graphs folder
-cd "`date'"
-log using "${log_path}/event_studies_log_`date'.log", replace text
+capture mkdir "${S_DATE}" // creates new folder for new date in event study graphs folder
+cd "${S_DATE}"
+log using "${log_path}/event_studies_log_${S_DATE}.log", replace text
 
 
 
 ***************** Set quarter merge type (first day of q or last day of q) *****************
 local quarter_type ldq
 
-local birth_prefixes natality lbw lt37weeks_lmp lt37weeks_oe 
-local birth_suffixes total black hispanic teen unmarried 
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried hsorless
+
 local count = 0
 *** Set locals for list of quarter/month datasets for when birth order is any order:
-local quarter_datasets_order_any larc_util_`quarter_type'
+local quarter_datasets_order_any
 local ++count
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
@@ -47,6 +48,9 @@ foreach prefix of local birth_prefixes {
 		local quarter_datasets_order_any `quarter_datasets_order_any' `prefix'_`suffix'_`quarter_type'
 	}
 }
+
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried // hsorless ONLY available for quarterly dataset
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		local ++count
@@ -55,7 +59,8 @@ foreach prefix of local birth_prefixes {
 }
 
 *Set locals for list of quarter/month datasets when birth order is 2nd or greater:
-
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried hsorless
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		*display "S:\LARC\data\analysis_data\\`prefix'_`suffix'_`quarter_type'_C2.dta"
@@ -94,7 +99,7 @@ display `count'
 /*********************************************************************************************
 *************************** COMMENT OUT BELOW TO DO ALL DATASETS ****************************
 *********************************************************************************************
-local quarter_datasets larc_util_fdq natality_total_ldq
+local quarter_datasets natality_total_ldq
 local month_datasets lbw_black
 *********************************************************************************************/
 local count2 = 0
@@ -102,7 +107,7 @@ local count2 = 0
 foreach birth_order in order_any order_two_plus {
 	foreach time_period in quarter month {
 		display "--------------------------------------------------"
-		display "`time_period'"
+		display "TIME PERIOD: `time_period'"
 		display "--------------------------------------------------"
 		foreach dataset_orig in ``time_period'_datasets_`birth_order'' {
 			local ++count2
@@ -150,7 +155,7 @@ foreach birth_order in order_any order_two_plus {
 				local outcome_var num_rx
 			}
 			if substr("`dataset'",1,4)!="larc" {
-				local date_enacted_var date_enacted_8molag
+				local date_enacted_var date_enacted_9molag
 				local outcome_var births
 			}
 			
@@ -386,10 +391,6 @@ foreach birth_order in order_any order_two_plus {
 				local subtitle "(all birth orders)"
 			}
 			
-			if substr("`dataset'",1,4)=="larc" {
-				local title_line1 "LARC utilization, Medicaid"
-				local title_line2
-			}
 			*Get the outcome from the dataset name to use in the title: 
 			if substr("`dataset'",1,3)=="lbw" {
 				local title_line1 "low birthweight births, `population'"
@@ -399,14 +400,7 @@ foreach birth_order in order_any order_two_plus {
 				local title_line1 "total births, `population'"
 				local title_line2
 			}
-			if substr("`dataset'",1,12)=="lt37weeks_oe" {
-				local title_line1 "premature births, `population'"
-				local title_line2 "(<37 weeks, OB estimate)"
-			}
-			if substr("`dataset'",1,13)=="lt37weeks_lmp" {
-				local title_line1 "premature births, `population'" 
-				local title_line2 "(<37 weeks, last menstrual period)"
-			}
+			
 			qui sum policy_time_diff if orig_t_`lower_cutoff_num'==1
 			local min = r(mean)
 			qui sum policy_time_diff if orig_t_`upper_cutoff_num'==1
