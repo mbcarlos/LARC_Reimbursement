@@ -31,20 +31,16 @@ log using "${log_path}/event_studies_log_${S_DATE}.log", replace text
 
 
 
-***************** Set quarter merge type (first day of q or last day of q) *****************
+/***************** Set quarter merge type (first day of q or last day of q) *****************
 local quarter_type ldq
-
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried hsorless
 
-local count = 0
 *** Set locals for list of quarter/month datasets for when birth order is any order:
 local quarter_datasets_order_any
-local ++count
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		display "`prefix'_`suffix'"
-		local ++count
 		local quarter_datasets_order_any `quarter_datasets_order_any' `prefix'_`suffix'_`quarter_type'
 	}
 }
@@ -53,47 +49,60 @@ local birth_prefixes natality lbw
 local birth_suffixes total teen unmarried // hsorless ONLY available for quarterly dataset
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
-		local ++count
 		local month_datasets_order_any `month_datasets_order_any' `prefix'_`suffix'
 	}
 }
+*/
+
+local quarter_type ldq
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried hsorless
+local quarter_datasets_order_first
+local month_datasets_order_first
+
+*** Set locals for list of quarter/month datasets for when birth order is first birth order:
+local quarter_datasets_order_first
+foreach prefix of local birth_prefixes {
+	foreach suffix of local birth_suffixes {
+		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C1.dta"
+		if _rc==0 {
+			local quarter_datasets_order_first `quarter_datasets_order_first' `prefix'_`suffix'_`quarter_type'_C1
+		}
+	}
+}
+
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried // hsorless ONLY available for quarterly dataset
+foreach prefix of local birth_prefixes {
+	foreach suffix of local birth_suffixes {
+		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_C1.dta"
+		if _rc==0 {
+			local month_datasets_order_first `month_datasets_order_first' `prefix'_`suffix'_C1
+		}
+	}
+}
+
+
 
 *Set locals for list of quarter/month datasets when birth order is 2nd or greater:
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried hsorless
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
-		*display "S:\LARC\data\analysis_data\\`prefix'_`suffix'_`quarter_type'_C2.dta"
-		display "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C2.dta"
-		*capture confirm file "S:\LARC\data\analysis_data\\`prefix'_`suffix'_`quarter_type'_C2.dta"
 		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C2.dta"
-		
 		if _rc==0 {
 			local quarter_datasets_order_two_plus `quarter_datasets_order_two_plus' `prefix'_`suffix'_`quarter_type'_C2
-			local ++count
-		}
-		else {
-			display "FILE DOESNT EXIST - MOVE ON"
 		}
 	}
 }
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
-		*display "S:\LARC\data\analysis_data\\`prefix'_`suffix'_C2.dta"
-		display "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
-		*capture confirm file "S:\LARC\data\analysis_data\\`prefix'_`suffix'_C2.dta"
 		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
 		if _rc==0 {
 			local month_datasets_order_two_plus `month_datasets_order_two_plus' `prefix'_`suffix'_C2
-			local ++count
-		}
-		else {
-			display "FILE DOESNT EXIST - MOVE ON"
 		}
 	}
 }
-display `count'
-
 
 
 /*********************************************************************************************
@@ -104,7 +113,8 @@ local month_datasets lbw_black
 *********************************************************************************************/
 local count2 = 0
 
-foreach birth_order in order_any order_two_plus {
+*foreach birth_order in order_any order_two_plus {
+foreach birth_order in order_first order_two_plus{
 	foreach time_period in quarter month {
 		display "--------------------------------------------------"
 		display "TIME PERIOD: `time_period'"
@@ -120,16 +130,20 @@ foreach birth_order in order_any order_two_plus {
 			
 			*** Generate a dataset local that takes the C2 off of the end of the dataset name:
 			*** Only need to do this if `birth_order'=order_two_plus
-			if "`birth_order'"=="order_two_plus" {
+			/*if "`birth_order'"=="order_two_plus" {
 				local dataset = substr("`dataset_orig'",1,strlen("`dataset_orig'")-3)
 			}
 			if "`birth_order'"=="order_any" {
 				local dataset "`dataset_orig'"
-			}
+			}*/
+			*** Generate a dataset local that takes the C1 or C2 off of the end of the dataset name:
+			local dataset = substr("`dataset_orig'",1,strlen("`dataset_orig'")-3)
+			
 			
 			display "DATASET EDITED NAME: `dataset'"
 			
 
+			
 			* start 1 **************************************************************************************
 			***Variables differ according to which dataset we are using - check the dataset and set locals accordingly:
 			if "`time_period'"=="quarter" {
@@ -199,7 +213,7 @@ foreach birth_order in order_any order_two_plus {
 			qui sum state_num
 			* Variable "separate_device_reimb" = 1 if a state offers separate reimbursement for device at any time - 
 			* Create a variable for whether a state offers separate reimbursement for a device during the time period 
-			* in which we have data:
+			* in which we have data, taking into account 9 month lag
 			qui gen separate_device_reimb_indata = .
 			local max = r(max)
 			forvalues i = 1/`max' {
@@ -207,6 +221,9 @@ foreach birth_order in order_any order_two_plus {
 				local state_max = r(max)
 				qui replace separate_device_reimb_indata=`state_max' if state_num==`i'
 			}
+			**** Drop all STATES where date enacted 9mo lag is on or after the last quarter of 2016
+			***** THIS IS THE LAST YEAR OF DATA WE CURRENTLY HAVE AND NEEDS TO BE UPDATED WHEN GET NEW VITAL STATISTICS DATA
+			drop if (date_enacted_9molag>=mdy(10,1,2016) & separate_device_reimb_indata == 1) | separate_device_reimb_indata==0
 			* end 3 **************************************************************************************
 			
 			* start 4 **************************************************************************************
@@ -387,8 +404,8 @@ foreach birth_order in order_any order_two_plus {
 			if "`birth_order'"=="order_two_plus" {
 				local subtitle "(second child or greater birth order)"
 			}
-			if "`birth_order'"=="order_any" {
-				local subtitle "(all birth orders)"
+			if "`birth_order'"=="order_first" { //"`birth_order'"=="order_any" {
+				local subtitle "first + unknown birth order" //"(all birth orders)"
 			}
 			
 			*Get the outcome from the dataset name to use in the title: 
@@ -422,7 +439,7 @@ foreach birth_order in order_any order_two_plus {
 				local policy_lag_note "t=0 inidicates the quarter in which the policy went into effect"
 			}
 			if substr("`dataset'",1,4)!="larc" {
-				local policy_lag_note "t=0 indicates the `time_period' that is 8 months after the policy went into effect"
+				local policy_lag_note "t=0 indicates the `time_period' that is 9 months after the policy went into effect"
 			}
 			
 			*** Count number of states with separate device reimbursement in dataset time period:
@@ -463,6 +480,5 @@ foreach birth_order in order_any order_two_plus {
 		}
 	}
 }
-display "COUNT 1: `count'"
-display "COUNT 2: `count2'"
+
 log close

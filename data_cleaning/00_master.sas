@@ -9,7 +9,7 @@ Input:
 Output: 
 	analysis datasets in S:\LARC\data\analysis_data
 	SAS formatted state drug utilization data in S:\LARC\data\raw_data\state_drug_utilization
-Date modified: May 4, 2018
+Date modified: September 17, 2018
 Author: Marisa Carlos (mbc96@cornell.edu)
 **********************************************************************************************************************************************/
 
@@ -28,22 +28,20 @@ libname savedata "S:\LARC\data\analysis_data";
 
 ****************************************************** PATHS USING NETWORK MAPPING ******************************************************;
 **NOTE: To use below must map network drive B to \\tsclient\Dropbox (Personal) --- subst B: "\\tsclient\Dropbox (Personal)";
-%let larc_policy_spreadsheet_path = B:\Cornell\Research\Projects\LARC_Reimbursement\state_larc_policies_2018_04_09.csv;
+*%let larc_policy_spreadsheet_path = B:\Cornell\Research\Projects\LARC_Reimbursement\state_larc_policies_2018_04_09.csv;
 %let sas_code_path = B:\Cornell\Research\Projects\LARC_Reimbursement\code\data_cleaning\;
 *** IF CONNECTED TOP FOLDER (LARC_Reimbursement): subst B: "\\tsclient\\LARC_Reimbursement";
 %let larc_policy_spreadsheet_path = B:\state_larc_policies_2018_09_14.csv;
 %let sas_code_path = B:\code\data_cleaning\;
-
+%let LARC_data_path_pipe = 'dir "B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\*.xlsx" /b';
+%let LARC_data_path =  B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\;
 ********************************************************************************************************************************************;
 
 ****************************************************** SET START/END YEARS FOR DATA ******************************************************;
 %let first_year_birth_data = 2007; *CHANGE IF GET NEW DATA; 
 %let last_year_birth_data = 2016; *CHANGE IF GET NEW DATA;
-
-
 **************************************************************** RUN CODES ****************************************************************;
-*%include "&sas_code_path.01_import_utilization_data.sas"; *THIS ISNT BEING USED ANYOMRE;
-*%include "&sas_code_path.02_create_LARC_util_rollup.sas"; *THIS ISNT BEING USED ANYMORE;
-%include "&sas_code_path.03_import_birth_data.sas";
-*%include "&sas_code_path.04_create_analysis_data.sas";
+%include "&sas_code_path.01_import_larc_utilization_data.sas";
+%include "&sas_code_path.02_import_birth_data.sas";
+%include "&sas_code_path.03_create_analysis_data.sas";
 ********************************************************************************************************************************************;

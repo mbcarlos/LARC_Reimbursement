@@ -26,13 +26,13 @@ tex_file_lines.append('This page intentionally blank. Compare the following page
 
 for prefix in prefixes:
     for suffix in suffixes:
-        ## Any birth order:
+        ## First birth order:
         # First make sure month graph exists (not all datasets for month, e.g. hsorless):
-        if Path(r'''%s%s_%s_month_ES.pdf''' %(mypath, prefix, suffix)).is_file():
+        if Path(r'''%s%s_%s_C1_month_ES.pdf''' %(mypath, prefix, suffix)).is_file():
             tex_file_lines.append(r'''\begin{figure}[H]''')
-            tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_month_ES.pdf}''' %(prefix, suffix))
-            tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_%s_quarter_ES.pdf}''' %(prefix, suffix, ldq_or_fdq))
-            caption_unedited = "%s_%s_month (top) and %s_%s_quarter (bottom), all birth orders" %(prefix, suffix, prefix, suffix)
+            tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_C1_month_ES.pdf}''' %(prefix, suffix))
+            tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_%s_C1_quarter_ES.pdf}''' %(prefix, suffix, ldq_or_fdq))
+            caption_unedited = "%s_%s_C1_month (top) and %s_%s_C1_quarter (bottom), first + unknown birth orders" %(prefix, suffix, prefix, suffix)
             caption_edited = caption_unedited.replace("_"," ")
             tex_file_lines.append(r'''    \caption{%s}''' %(caption_edited))
             tex_file_lines.append(r'''\end{figure}''')
@@ -48,15 +48,15 @@ for prefix in prefixes:
             if Path(r'''%s%s_%s_C2_month_ES.pdf''' %(mypath, prefix, suffix)).is_file():
                 tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_C2_month_ES.pdf}''' %(prefix, suffix))
                 caption_unedited = "%s %s %s month (top)" %(caption_unedited, prefix, suffix)
-            else:
-                tex_file_lines.append(r'''    \textbf{(No month graph because of small cells) \\}''')
-                tex_file_lines.append(r''' \\ ''')
-                tex_file_lines.append(r''' \\ ''')
+            #else:
+                #tex_file_lines.append(r'''    \textbf{(No month graph because of small cells) \\}''')
+                #tex_file_lines.append(r''' \\ ''')
+                #tex_file_lines.append(r''' \\ ''')
             if Path(r'''%s%s_%s_%s_C2_quarter_ES.pdf''' %(mypath, prefix, suffix, ldq_or_fdq)).is_file():
                 tex_file_lines.append(r'''    \includegraphics[width=\textwidth]{%s_%s_%s_C2_quarter_ES.pdf}''' %(prefix, suffix, ldq_or_fdq))
                 caption_unedited = "%s %s %s quarter (bottom)" %(caption_unedited, prefix, suffix)
             else:
-                tex_file_lines.append(r'''    \textbf{(No quarter graph because of small cells) \\}''')
+                tex_file_lines.append(r'''    \textbf{(No quarter graph) \\}''')
                 tex_file_lines.append(r''' \\ ''')
                 tex_file_lines.append(r''' \\ ''')
             caption_edited = caption_unedited.replace("_"," ")
@@ -64,7 +64,7 @@ for prefix in prefixes:
             tex_file_lines.append(r'''\end{figure}''')
         else:
             tex_file_lines.append(r'''\newpage''')
-            tex_file_lines.append('No month or quarter graphs due to small cells.')
+            tex_file_lines.append('No month or quarter graphs.')
             
         
 #for item in tex_file_lines:

@@ -188,7 +188,6 @@ quit;
 %merge_birth_policies;
 
 
-
 ******************************************************************************************************************************
 ********************************************* Merge LARC policy info with QUARTERLY birth data**********************************
 ******************************************************************************************************************************;
@@ -427,3 +426,73 @@ quit;
 %end;
 %mend merge_quarter_childtwo;
 %merge_quarter_childtwo;
+
+
+
+
+************************************************************************************************************************************
+Merge LARC policy info with LARC utilization data
+************************************************************************************************************************************;
+
+
+%macro merge_larc_policy_info(larc_date_suffix=);
+proc sql noprint;
+	create table savedata.larc_utilization_fdq as 
+		select *
+			from savedata.larc_utilization as a
+			inner join state_larc_policies as b
+				on (a.firstday_q >= b.date_enacted&larc_date_suffix.
+					AND a.firstday_q <= b.date_ended&larc_date_suffix.
+					AND upcase(strip(a.state))=upcase(strip(b.state_short)))
+				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
+					AND b.policy_num=1 
+					AND a.firstday_q < b.date_enacted&larc_date_suffix.);
+
+	create table savedata.larc_utilization_ldq as 
+		select *
+			from savedata.larc_utilization as a 
+			inner join state_larc_policies as b
+				on (a.lastday_q >= b.date_enacted&larc_date_suffix. 
+					AND a.lastday_q <= b.date_ended&larc_date_suffix.
+					AND upcase(strip(a.state))=upcase(strip(b.state_short)))
+				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
+					AND b.policy_num=1 
+					AND a.lastday_q < b.date_enacted&larc_date_suffix.);
+
+	create table savedata.larc_utilization_fdq as 
+		select *,
+		case
+			when upcase(device_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=firstday_q<=date_ended&larc_date_suffix. then 1
+			else 0
+		end as separate_device_reimb,
+		case
+			when upcase(insertion_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=firstday_q<=date_ended&larc_date_suffix. then 1
+			else 0
+		end as separate_insert_reimb
+			from savedata.larc_utilization_fdq
+				order by state, year, quarter;
+
+	create table savedata.larc_utilization_ldq as 
+		select *,
+		case
+			when upcase(device_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=lastday_q<=date_ended&larc_date_suffix. then 1
+			else 0
+		end as separate_device_reimb,
+		case
+			when upcase(insertion_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=lastday_q<=date_ended&larc_date_suffix. then 1
+			else 0
+		end as separate_insert_reimb
+			from savedata.larc_utilization_ldq
+				order by state, year, quarter;
+quit;
+
+*** Export to stata;
+proc export data=savedata.larc_utilization_fdq outfile="&save_stata_data_path.larc_utilization_fdq.dta"
+replace;
+quit;
+
+proc export data=savedata.larc_utilization_ldq outfile="&save_stata_data_path.larc_utilization_ldq.dta"
+replace;
+quit;
+%mend merge_larc_policy_info;
+%merge_larc_policy_info(larc_date_suffix=_9molag);
