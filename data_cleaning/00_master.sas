@@ -35,6 +35,7 @@ libname savedata "S:\LARC\data\analysis_data";
 %let sas_code_path = B:\code\data_cleaning\;
 %let LARC_data_path_pipe = 'dir "B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\*.xlsx" /b';
 %let LARC_data_path =  B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\;
+%let unemployment_data_path = B:\Data\unemployment_population_data.xlsx;
 ********************************************************************************************************************************************;
 
 ****************************************************** SET START/END YEARS FOR DATA ******************************************************;

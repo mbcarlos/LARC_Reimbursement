@@ -93,27 +93,52 @@ proc sql noprint;
 				else mdy(1,1,1900)
 			end as date_enacted format=mmddyy10.,
 			case
-				when month_ended_code is not missing then intnx('day', intnx('month', mdy(month_ended_code,1,year_ended) , 1), -1)
+				when month_ended_code is not missing then intnx('month',mdy(month_ended_code,1,year_ended),0,'E')
+				/*the last day of the month in which the policy is enacted (means from the end ('E') of mdy(month_ended_code_1,year_ended), add 0 months)*/
+				/*when month_ended_code is not missing then intnx('day', intnx('month', mdy(month_ended_code,1,year_ended) , 1), -1)*/
 				else mdy(1,1,2100)
 			end as date_ended format=mmddyy10.,
 	
 			case
-				when month_enacted_code is not missing then intnx('month', mdy(month_enacted_code,1,year_enacted), 9)
+				/*when month_enacted_code is not missing then intnx('month', mdy(month_enacted_code,1,year_enacted), 9)*/
+				when month_enacted_code is not missing then intnx('month',intnx('month', mdy(month_enacted_code,1,year_enacted), 9,'M'),0,'B')
+				/*from the month the policy is enacted, go to the middle of the month, add 9 months, then go to th beginning of that month*/
 				else mdy(1,1,1900)
 			end as date_enacted_9molag format=mmddyy10.,
+/*************************************************************************************************************************************************
+*************************************************************************************************************************************************
+*************************************************************************************************************************************************
 			case
 				when month_ended_code is not missing then 
-					intnx('month', intnx('day', intnx('month', mdy(month_ended_code,1,year_ended) , 1), -1), 9) 
+					intnx('month', 
+						intnx('day', 
+							intnx('month', mdy(month_ended_code,1,year_ended) , 1)
+						, -1)
+					, 9) 
+				else mdy(1,1,2100)
+			end as date_ended_9molag format=mmddyy10.,
+*************************************************************************************************************************************************
+*************************************************************************************************************************************************
+*************************************************************************************************************************************************/
+			case
+				when month_ended_code is not missing then intnx('month',intnx('month',intnx('month',mdy(month_ended_code,1,year_ended),0,'E'),9,'M'),0,'E')
+				/*from the last day of the month when the policy is enacted, go tot he middle of the month, add 9 months, then go to the end of that month*/
+				/*when month_ended is not missing then intnx('month',intnx('month',date_ended,9,'M'),0,'E')*/
 				else mdy(1,1,2100)
 			end as date_ended_9molag format=mmddyy10.,
 
 			case
-				when month_enacted_code is not missing then intnx('month', mdy(month_enacted_code,1,year_enacted), 8)
+				when month_enacted_code is not missing then intnx('month',intnx('month', mdy(month_enacted_code,1,year_enacted), 8,'M'),0,'B')
+				/*from the middle of the month the policy is enacted, add 8 months, then go to the bginning of that month*/
+				/*when month_enacted_code is not missing then intnx('month', mdy(month_enacted_code,1,year_enacted), 8)*/
 				else mdy(1,1,1900)
 			end as date_enacted_8molag format=mmddyy10.,
 			case
-				when month_ended_code is not missing then 
-					intnx('month', intnx('day', intnx('month', mdy(month_ended_code,1,year_ended) , 1), -1), 8) 
+				when month_ended_code is not missing then intnx('month',intnx('month',intnx('month',mdy(month_ended_code,1,year_ended),0,'E'),8,'M'),0,'E')
+				/*from the end of the month the policy is enacted, move to the middle of the month, add 8 months, then go to the last day of that month*/
+				/*when month_ended is not missing then intnx('month',intnx('month',date_ended,8,'M'),0,'E')*/
+				/*when month_ended_code is not missing then 
+					intnx('month', intnx('day', intnx('month', mdy(month_ended_code,1,year_ended) , 1), -1), 8) */
 				else mdy(1,1,2100)
 			end as date_ended_8molag format=mmddyy10.
 				from state_larc_policies;
@@ -121,6 +146,28 @@ quit;
 %mend larc_policies;
 %larc_policies;
 
+
+*******************************************************************************************************************************
+*********************************************** Read in unemployment info data ************************************************
+*******************************************************************************************************************************;
+*** Read in excel sheet;
+proc import datafile = "&unemployment_data_path."
+	dbms=xlsx
+	out=unemployment_data
+	replace;
+	getnames=yes;
+run;
+
+*** Add in two-character state codes using SASHELP zipcode table;
+proc sql noprint;
+	create table unemployment_data as 
+		select input(a.year,4.) as year, a.*, b.statecode as state_short
+			from unemployment_data as a
+			inner join 
+				(select distinct statename, statecode
+				from sashelp.zipcode) as b
+					on upcase(strip(a.state)) = upcase(strip(b.statename));
+quit;
 
 ******************************************************************************************************************************
 ********************************************* Merge LARC policy info with MONTHLY birth data**********************************
@@ -178,6 +225,27 @@ quit;
 		%put COUNT MISSING: &countmissing.;
 		%put -------------------------------------------------------------------------------;
 
+		*** Merge in annual unemployment data;
+		proc sql noprint;
+			select count(*) into :count1 from savedata.&prefix._&suffix.;
+
+			create table savedata.&prefix._&suffix. as 
+				select a.*, year(a.month_year)-1 as year_lagged, b.population, b.unemployment_rate
+					from savedata.&prefix._&suffix. as a
+					left join unemployment_data as b
+						on year(a.month_year)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			create table savedata.&prefix._&suffix. as 
+				select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+					from savedata.&prefix._&suffix. as a
+					inner join unemployment_data as b
+						on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			select count(*) into :count2 from savedata.&prefix._&suffix.;
+
+		quit;
+		%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
+
 		*Create stata dataset;
 		proc export data=savedata.&prefix._&suffix. outfile="&save_stata_data_path.&prefix._&suffix..dta"
 		replace;
@@ -213,14 +281,32 @@ quit;
 						OR (upcase(strip(a.state))=upcase(strip(b.state_long))
 						AND b.policy_num=1 AND a.firstday_q < b.date_enacted&larc_date_suffix.);
 
+**********************************************************************************************************************************************
+**********************************************************************************************************************************************
+**********************************************************************************************************************************************;
 			create table savedata.&prefix._&suffix._ldq as 
 				select *
 					from &prefix._&suffix._q as a
 					inner join state_larc_policies as b
-						on (a.lastday_q >= b.date_enacted&larc_date_suffix. AND a.lastday_q <= b.date_ended&larc_date_suffix.
-						AND upcase(strip(a.state))=upcase(strip(b.state_long)))
-						OR (upcase(strip(a.state))=upcase(strip(b.state_long))
-						AND b.policy_num=1 AND a.lastday_q < b.date_enacted&larc_date_suffix.);
+						on (
+							a.lastday_q >= b.date_enacted&larc_date_suffix. AND a.lastday_q <= b.date_ended&larc_date_suffix.
+							AND upcase(strip(a.state))=upcase(strip(b.state_long))
+							)
+						OR (
+							upcase(strip(a.state))=upcase(strip(b.state_long))
+							AND b.policy_num=1 AND a.lastday_q < b.date_enacted&larc_date_suffix.);
+
+**********************************************************************************************************************************************
+**********************************************************************************************************************************************
+**********************************************************************************************************************************************;
+							
+							
+							
+
+
+
+
+
 
 			create table savedata.&prefix._&suffix._fdq as 
 				select *,
@@ -248,6 +334,45 @@ quit;
 					from savedata.&prefix._&suffix._ldq
 						order by state, year, quarter;
 		quit;
+
+		*** Merge in annual unemployment data;
+		proc sql noprint;
+			select count(*) into :count1 from savedata.&prefix._&suffix._fdq;
+
+			create table savedata.&prefix._&suffix._fdq as 
+				select a.*, year(a.firstday_q)-1 as year_lagged, b.population, b.unemployment_rate
+					from savedata.&prefix._&suffix._fdq as a
+					left join unemployment_data as b
+						on year(a.firstday_q)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			create table savedata.&prefix._&suffix._fdq as 
+				select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+					from savedata.&prefix._&suffix._fdq as a
+					inner join unemployment_data as b
+						on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			select count(*) into :count2 from savedata.&prefix._&suffix._fdq;
+		quit;
+		%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
+
+		proc sql noprint;
+			select count(*) into :count1 from savedata.&prefix._&suffix._ldq;
+
+			create table savedata.&prefix._&suffix._ldq as 
+				select a.*, year(a.firstday_q)-1 as year_lagged, b.population, b.unemployment_rate
+					from savedata.&prefix._&suffix._ldq as a
+					left join unemployment_data as b
+						on year(a.firstday_q)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			create table savedata.&prefix._&suffix._ldq as 
+				select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+					from savedata.&prefix._&suffix._ldq as a
+					inner join unemployment_data as b
+						on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+			select count(*) into :count2 from savedata.&prefix._&suffix._ldq;
+		quit;
+		%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
 	
 		*Create stata dataset;
 		proc export data=savedata.&prefix._&suffix._fdq outfile="&save_stata_data_path.&prefix._&suffix._fdq.dta"
@@ -326,6 +451,26 @@ quit;
 			%put MERGE COUNT: &countmerge.;
 			%put COUNT MISSING: &countmissing.;
 			%put -------------------------------------------------------------------------------;
+
+			*** Merge in annual unemployment data;
+			proc sql noprint;
+				select count(*) into :count1 from savedata.&prefix._&suffix._C2;
+
+				create table savedata.&prefix._&suffix._C2 as 
+					select a.*, year(a.month_year)-1 as year_lagged, b.population, b.unemployment_rate
+						from savedata.&prefix._&suffix._C2 as a
+						left join unemployment_data as b
+							on year(a.month_year)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+				create table savedata.&prefix._&suffix._C2 as 
+					select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+						from savedata.&prefix._&suffix._C2 as a
+						inner join unemployment_data as b
+							on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+				select count(*) into :count2 from savedata.&prefix._&suffix._C2;
+			quit;
+			%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
 
 			*Create stata dataset;
 			proc export data=savedata.&prefix._&suffix._C2 outfile="&save_stata_data_path.&prefix._&suffix._C2.dta"
@@ -410,6 +555,45 @@ quit;
 						from savedata.&prefix._&suffix._ldq_C2
 							order by state, year, quarter;
 			quit;
+
+			*** Merge in annual unemployment data;
+			proc sql noprint;
+				select count(*) into :count1 from savedata.&prefix._&suffix._fdq_C2;
+
+				create table savedata.&prefix._&suffix._fdq_C2 as 
+					select a.*, year(a.firstday_q)-1 as year_lagged, b.population, b.unemployment_rate
+						from savedata.&prefix._&suffix._fdq_C2 as a
+						left join unemployment_data as b
+							on year(a.firstday_q)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+				select count(*) into :count2 from savedata.&prefix._&suffix._fdq_C2;
+
+				create table savedata.&prefix._&suffix._fdq_C2 as 
+					select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+						from savedata.&prefix._&suffix._fdq_C2 as a
+						inner join unemployment_data as b
+							on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+			quit;
+			%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
+
+			proc sql noprint;
+				select count(*) into :count1 from savedata.&prefix._&suffix._ldq_C2;
+
+				create table savedata.&prefix._&suffix._ldq_C2 as 
+					select a.*, year(a.firstday_q)-1 as year_lagged, b.population, b.unemployment_rate
+						from savedata.&prefix._&suffix._ldq_C2 as a
+						left join unemployment_data as b
+							on year(a.firstday_q)=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+				create table savedata.&prefix._&suffix._ldq_C2 as 
+					select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+						from savedata.&prefix._&suffix._ldq_C2 as a
+						inner join unemployment_data as b
+							on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+				select count(*) into :count2 from savedata.&prefix._&suffix._ldq_C2;
+			quit;
+			%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) DIFF NUMBER OF OBS AFTER MERGING IN UNEMPLOYMENT INFO;
 		
 			*Create stata dataset;
 			proc export data=savedata.&prefix._&suffix._fdq_C2 outfile="&save_stata_data_path.&prefix._&suffix._fdq_C2.dta"
@@ -433,40 +617,37 @@ quit;
 ************************************************************************************************************************************
 Merge LARC policy info with LARC utilization data
 ************************************************************************************************************************************;
-
-
-%macro merge_larc_policy_info(larc_date_suffix=);
 proc sql noprint;
 	create table savedata.larc_utilization_fdq as 
 		select *
 			from savedata.larc_utilization as a
 			inner join state_larc_policies as b
-				on (a.firstday_q >= b.date_enacted&larc_date_suffix.
-					AND a.firstday_q <= b.date_ended&larc_date_suffix.
+				on (a.firstday_q >= b.date_enacted
+					AND a.firstday_q <= b.date_ended
 					AND upcase(strip(a.state))=upcase(strip(b.state_short)))
 				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
 					AND b.policy_num=1 
-					AND a.firstday_q < b.date_enacted&larc_date_suffix.);
+					AND a.firstday_q < b.date_enacted);
 
 	create table savedata.larc_utilization_ldq as 
 		select *
 			from savedata.larc_utilization as a 
 			inner join state_larc_policies as b
-				on (a.lastday_q >= b.date_enacted&larc_date_suffix. 
-					AND a.lastday_q <= b.date_ended&larc_date_suffix.
+				on (a.lastday_q >= b.date_enacted 
+					AND a.lastday_q <= b.date_ended
 					AND upcase(strip(a.state))=upcase(strip(b.state_short)))
 				OR (upcase(strip(a.state))=upcase(strip(b.state_short))
 					AND b.policy_num=1 
-					AND a.lastday_q < b.date_enacted&larc_date_suffix.);
+					AND a.lastday_q < b.date_enacted);
 
 	create table savedata.larc_utilization_fdq as 
 		select *,
 		case
-			when upcase(device_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=firstday_q<=date_ended&larc_date_suffix. then 1
+			when upcase(device_payment_type) contains "S" AND date_enacted<=firstday_q<=date_ended then 1
 			else 0
 		end as separate_device_reimb,
 		case
-			when upcase(insertion_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=firstday_q<=date_ended&larc_date_suffix. then 1
+			when upcase(insertion_payment_type) contains "S" AND date_enacted<=firstday_q<=date_ended then 1
 			else 0
 		end as separate_insert_reimb
 			from savedata.larc_utilization_fdq
@@ -475,18 +656,62 @@ proc sql noprint;
 	create table savedata.larc_utilization_ldq as 
 		select *,
 		case
-			when upcase(device_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=lastday_q<=date_ended&larc_date_suffix. then 1
+			when upcase(device_payment_type) contains "S" AND date_enacted<=lastday_q<=date_ended then 1
 			else 0
 		end as separate_device_reimb,
 		case
-			when upcase(insertion_payment_type) contains "S" AND date_enacted&larc_date_suffix.<=lastday_q<=date_ended&larc_date_suffix. then 1
+			when upcase(insertion_payment_type) contains "S" AND date_enacted<=lastday_q<=date_ended then 1
 			else 0
 		end as separate_insert_reimb
 			from savedata.larc_utilization_ldq
 				order by state, year, quarter;
 quit;
 
-*** Export to stata;
+************************************************************************************************************************************
+Merge unmployment and population data into LARC utilization data
+************************************************************************************************************************************;
+%macro merge_larc_unemployment_data;
+proc sql noprint;
+	select count(*) into :count1 from savedata.larc_utilization_fdq;
+
+	create table savedata.larc_utilization_fdq as 
+		select a.*, a.year-1 as year_lagged, b.population, b.unemployment_rate
+			from savedata.larc_utilization_fdq as a
+			left join unemployment_data as b
+				on a.year=b.year and upcase(strip(a.state)) = upcase(strip(b.state_short));
+
+	create table savedata.larc_utilization_fdq as 
+		select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+			from savedata.larc_utilization_fdq as a
+			inner join unemployment_data as b
+				on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+	select count(*) into :count2 from savedata.larc_utilization_fdq;
+quit;
+%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) NUMBER OF OBS NOT EQUAL AFTER MERGING IN UNEMPLOYMENT DATA;
+
+proc sql noprint;
+	select count(*) into :count1 from savedata.larc_utilization_ldq;
+
+	create table savedata.larc_utilization_ldq as 
+		select a.*, a.year-1 as year_lagged, b.population, b.unemployment_rate
+			from savedata.larc_utilization_ldq as a
+			left join unemployment_data as b
+				on a.year=b.year and upcase(strip(a.state)) = upcase(strip(b.state_short));
+
+	create table savedata.larc_utilization_ldq as 
+		select a.*, b.population as population_1yrlag, b.unemployment_rate as unemployment_rate_1yrlag
+			from savedata.larc_utilization_ldq as a
+			inner join unemployment_data as b
+				on a.year_lagged=b.year and upcase(strip(a.state_short)) = upcase(strip(b.state_short));
+
+	select count(*) into :count2 from savedata.larc_utilization_ldq;
+quit;
+%if &count1.~=&count2. %then %put ERROR: (count1=&count1. count2=&count2.) NUMBER OF OBS NOT EQUAL AFTER MERGING IN UNEMPLOYMENT DATA;
+%mend merge_larc_unemployment_data;
+%merge_larc_unemployment_data;
+
+*** Export LARC utilization datasets to stata;
 proc export data=savedata.larc_utilization_fdq outfile="&save_stata_data_path.larc_utilization_fdq.dta"
 replace;
 quit;
@@ -494,5 +719,3 @@ quit;
 proc export data=savedata.larc_utilization_ldq outfile="&save_stata_data_path.larc_utilization_ldq.dta"
 replace;
 quit;
-%mend merge_larc_policy_info;
-%merge_larc_policy_info(larc_date_suffix=_9molag);
