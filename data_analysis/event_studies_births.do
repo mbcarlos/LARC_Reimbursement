@@ -35,7 +35,7 @@ local quarter_type ldq
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried hsorless
 local quarter_datasets_order_first
-local month_datasets_order_first
+*local month_datasets_order_first // NOT DOING MONTH ANYMORE
 
 *** Set locals for list of quarter/month datasets for when birth order is first birth order:
 local quarter_datasets_order_first
@@ -47,7 +47,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
-
+/* NOT DOING MONTHLY ANYMORE
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried // hsorless ONLY available for quarterly dataset
 foreach prefix of local birth_prefixes {
@@ -58,6 +58,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
+*/
 
 
 
@@ -72,6 +73,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
+/*  NOT DOING MONTHLY ANYMORE
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
@@ -80,6 +82,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
+*/
 
 
 /*********************************************************************************************
@@ -91,7 +94,7 @@ local month_datasets lbw_black
 
 *foreach birth_order in order_any order_two_plus {
 foreach birth_order in order_first order_two_plus{
-	foreach time_period in quarter month {
+	foreach time_period in quarter { //  month { // NOT DOING MONTH ANYMORE
 		display "--------------------------------------------------"
 		display "TIME PERIOD: `time_period'"
 		display "--------------------------------------------------"
@@ -125,6 +128,7 @@ foreach birth_order in order_first order_two_plus{
 			if "`time_period'"=="quarter" {
 				*** Variable for the number of months/quarters before policy to cut off graphs at:
 				local num_t_lower_cutoff = -8
+				local num_t_upper_cutoff = 8
 				
 				if "`quarter_type'"=="ldq" {
 					local current_date_var lastday_q
@@ -133,12 +137,14 @@ foreach birth_order in order_first order_two_plus{
 					local current_date_var firstday_q
 				}
 			}
+			/*NOT DOING MONTH ANYMORE
 			if "`time_period'"=="month" {
 				local current_date_var month_year
 				local num_t_lower_cutoff = -24
+				local num_t_upper_cutoff = 24
 				gen month = month(`current_date_var')
 				gen year = year(`current_date_var')
-			}
+			}*/
 			
 			if substr("`dataset'",1,4)=="larc" {
 				local date_enacted_var date_enacted
@@ -208,10 +214,11 @@ foreach birth_order in order_first order_two_plus{
 			capture drop date_enacted_`time_period'
 			capture drop current_`time_period'
 			capture drop policy_time_diff
+			/* NOT DOING MONTH ANYMORE
 			if "`time_period'"=="month" {
 				qui gen date_enacted_`time_period' = mofd(`date_enacted_var')
 				qui gen current_`time_period' = mofd(`current_date_var') 
-			}
+			}*/
 			if "`time_period'"=="quarter"{
 				qui gen date_enacted_`time_period' = qofd(`date_enacted_var')
 				qui gen current_`time_period' = qofd(`current_date_var') 
@@ -263,42 +270,18 @@ foreach birth_order in order_first order_two_plus{
 		
 			* end 6 **************************************************************************************
 			
-			/* start 7 **************************************************************************************
-			* Look at number of obs in each pre-policy month:
+			* start 7 **************************************************************************************
+			*** Cutoff top t=8 quarters of t=24 months; figure out which t_ this corresponds to
+			local first_nonneg_period = `omit_num'+1
 			qui sum count_t_periods
-			local max =r(max)
-			forvalues i = 1/`max' {
-				if `i' != `omit_num' {
-					qui count if t_`i'==1
-					local N = r(N) 
-					display "t_`i': `N'"
-				}
-				if `i' == `omit_num' {
-					qui count if omit_t_`omit_num' ==1
-					local N = r(N) 
-					display "t_`i' (==-1): `N'"
-				}
-			}
-			*/
-			* Use number of obs in each pre-policy month to figure out where to cutoff at top 
-			* Code below just cuts off at greatest number of months after policy, but can use it to 
-			* cutoff at different point later....
-			qui sum count_t_periods
-			*local upper_cutoff_num = r(max)
-			local max = r(max)
-			
-			*Cutoff once the number of observations is less than 3:
-			local to_val = `omit_num'+1
-			forvalues i = `max'(-1)`to_val'{
-				qui count if t_`i'==1
-				local n = r(N)
-				if r(N)<=3 {
+			forvalues i = `r(max)'(-1)`first_nonneg_period' {
+				qui sum policy_time_diff if t_`i'==1
+				if `r(mean)' == `num_t_upper_cutoff' {
 					local upper_cutoff_num = `i'
 				}
 			}
 			
 			
-			capture drop orig_t_`upper_cutoff_num'
 			gen orig_t_`upper_cutoff_num'=t_`upper_cutoff_num'
 			local N = `upper_cutoff_num'+1
 			if `N'<=`max' {
@@ -313,7 +296,7 @@ foreach birth_order in order_first order_two_plus{
 			* Run regression to generate event study graphs:
 
 			*reg log_`outcome_var' t_* i.`time_period' i.year i.state_num  if separate_device_reimb_indata==1, noomitted cluster(state_num)
-			reg log_`outcome_var' t_* i.`time_period'##i.year i.state_num medicaid_expanded  if separate_device_reimb_indata==1, noomitted cluster(state_num)
+			reg log_`outcome_var' t_* i.`time_period'##i.year i.state_num medicaid_expanded unemployment_rate_1yrlag if separate_device_reimb_indata==1, noomitted cluster(state_num)
 
 			* end 8 **************************************************************************************
 			
@@ -363,12 +346,13 @@ foreach birth_order in order_first order_two_plus{
 			** Create event study graph
 			*** Get the population from the dataset name to use in the title:
 			if substr("`dataset'",1,4)!="larc" {
+				/* NOT DOING MONTH ANYMORE
 				if "`time_period'"=="month" {
 					local population = substr("`dataset'",strrpos("`dataset'","_")+1, .)
 					if "`population'"=="total" {
 						local population "all"
 					}
-				}
+				}*/
 				if "`time_period'"=="quarter" {
 					local population = substr(substr("`dataset'",1,strrpos("`dataset'","_")-1),strrpos(substr("`dataset'",1,strrpos("`dataset'","_")-1),"_")+1, .)
 					if "`population'"=="total" {
@@ -407,9 +391,10 @@ foreach birth_order in order_first order_two_plus{
 			if "`quarter_type'"=="ldq" {
 				local merge_notes "  - Policy info merged using the last day of the quarter in which the outcome is measured"
 			}
+			/*NOT DOING MONTH ANYMORE
 			if "`time_period'"=="month" {
 				local merge_notes 
-			}
+			}*/
 			
 			*** Policy lag note - indicate what t=0 means:
 			if substr("`dataset'",1,4)=="larc" {
@@ -443,6 +428,7 @@ foreach birth_order in order_first order_two_plus{
 				"  - Standard errors clustered at the state level" ///
 				"  - Observations more than `min_num' `time_period's before policy are included in the `min' indicator" ///
 				"  - Observations more than `max' `time_period's after policy are included in the `max' indicator" ///
+				"  - Regression includes controls for date of Medicaid expansion and lagged unemployment rate" ///
 				"  - `num_states_indata' states have separate device reimbursement during data time period" ///
 				"  - `num_missing_state_time_obs' out of `num_total_state_time_obs' state-`time_period's missing due to small cell censoring (`pct_missing_state_time_obs'%)" ///
 				"  - `policy_lag_note'" ///
