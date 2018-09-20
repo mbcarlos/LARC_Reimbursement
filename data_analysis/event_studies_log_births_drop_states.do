@@ -36,7 +36,7 @@ local quarter_type ldq
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried hsorless
 local quarter_datasets_order_first
-local month_datasets_order_first
+*local month_datasets_order_first // not doing monthly anymore
 
 *** Set locals for list of quarter/month datasets for when birth order is first birth order:
 local quarter_datasets_order_first
@@ -48,7 +48,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
-
+/* not doing monthly anymore
 local birth_prefixes natality lbw 
 local birth_suffixes total teen unmarried // hsorless ONLY available for quarterly dataset
 foreach prefix of local birth_prefixes {
@@ -58,7 +58,7 @@ foreach prefix of local birth_prefixes {
 			local month_datasets_order_first `month_datasets_order_first' `prefix'_`suffix'_C1
 		}
 	}
-}
+}*/
 
 
 
@@ -73,6 +73,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
+/* not doing monthly anymore
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_C2.dta"
@@ -81,7 +82,7 @@ foreach prefix of local birth_prefixes {
 		}
 	}
 }
-
+*/
 
 /*********************************************************************************************
 *************************** COMMENT OUT BELOW TO DO ALL DATASETS ****************************
@@ -133,13 +134,14 @@ foreach birth_order in order_two_plus { //order_first order_two_plus{
 					local current_date_var firstday_q
 				}
 			}
+			/* not doing monthly anymore
 			if "`time_period'"=="month" {
 				local current_date_var month_year
 				local num_t_lower_cutoff = -24
 				local num_t_upper_cutoff = 24
 				gen month = month(`current_date_var')
 				gen year = year(`current_date_var')
-			}
+			}*/
 			
 			if substr("`dataset'",1,4)=="larc" {
 				local date_enacted_var date_enacted
@@ -209,10 +211,11 @@ foreach birth_order in order_two_plus { //order_first order_two_plus{
 			capture drop date_enacted_`time_period'
 			capture drop current_`time_period'
 			capture drop policy_time_diff
+			/* not doing monthly anymore
 			if "`time_period'"=="month" {
 				qui gen date_enacted_`time_period' = mofd(`date_enacted_var')
 				qui gen current_`time_period' = mofd(`current_date_var') 
-			}
+			}*/
 			if "`time_period'"=="quarter"{
 				qui gen date_enacted_`time_period' = qofd(`date_enacted_var')
 				qui gen current_`time_period' = qofd(`current_date_var') 
@@ -346,12 +349,13 @@ foreach birth_order in order_two_plus { //order_first order_two_plus{
 				** Create event study graph
 				*** Get the population from the dataset name to use in the title:
 				if substr("`dataset'",1,4)!="larc" {
+					/* not doing monthly anymore
 					if "`time_period'"=="month" {
 						local population = substr("`dataset'",strrpos("`dataset'","_")+1, .)
 						if "`population'"=="total" {
 							local population "all"
 						}
-					}
+					}*/
 					if "`time_period'"=="quarter" {
 						local population = substr(substr("`dataset'",1,strrpos("`dataset'","_")-1),strrpos(substr("`dataset'",1,strrpos("`dataset'","_")-1),"_")+1, .)
 						if "`population'"=="total" {
@@ -388,9 +392,10 @@ foreach birth_order in order_two_plus { //order_first order_two_plus{
 				if "`quarter_type'"=="ldq" {
 					local merge_notes "  - Policy info merged using the last day of the quarter in which the outcome is measured"
 				}
+				/*
 				if "`time_period'"=="month" {
 					local merge_notes 
-				}
+				}*/
 				
 				*** Policy lag note - indicate what t=0 means:
 				if substr("`dataset'",1,4)=="larc" {
