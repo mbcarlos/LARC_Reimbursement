@@ -281,9 +281,6 @@ quit;
 						OR (upcase(strip(a.state))=upcase(strip(b.state_long))
 						AND b.policy_num=1 AND a.firstday_q < b.date_enacted&larc_date_suffix.);
 
-**********************************************************************************************************************************************
-**********************************************************************************************************************************************
-**********************************************************************************************************************************************;
 			create table savedata.&prefix._&suffix._ldq as 
 				select *
 					from &prefix._&suffix._q as a
@@ -295,18 +292,6 @@ quit;
 						OR (
 							upcase(strip(a.state))=upcase(strip(b.state_long))
 							AND b.policy_num=1 AND a.lastday_q < b.date_enacted&larc_date_suffix.);
-
-**********************************************************************************************************************************************
-**********************************************************************************************************************************************
-**********************************************************************************************************************************************;
-							
-							
-							
-
-
-
-
-
 
 			create table savedata.&prefix._&suffix._fdq as 
 				select *,
@@ -404,7 +389,7 @@ proc sql noprint;
 quit;
 %do i = 1 %to %sysfunc(countw(&prefixes.));
 	%let prefix = %scan(&prefixes., &i.);
-	%let larc_date_suffix = _8molag;
+	%let larc_date_suffix = _9molag;
 
 	%do j = 1 %to %sysfunc(countw(&suffixes.));
 		%let suffix = %scan(&suffixes., &j.);
@@ -500,7 +485,7 @@ proc sql noprint;
 quit;
 %do i = 1 %to %sysfunc(countw(&prefixes.));
 	%let prefix = %scan(&prefixes., &i.);
-	%let larc_date_suffix = _8molag;
+	%let larc_date_suffix = _9molag;
 
 	%do j = 1 %to %sysfunc(countw(&suffixes.));
 		%let suffix = %scan(&suffixes., &j.);
