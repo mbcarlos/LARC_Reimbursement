@@ -19,7 +19,7 @@ set more off
 global topdir "B:\Cornell\Research\Projects\LARC_Reimbursement\graphs\event_studies" // path to directory where event study graphs are stored
 *** If B: is mapped to Dropbox/Cornell/Research/Projects/LARC_Reimbursement:
 global topdir "B:\graphs\exploratory_graphs" // path to directory where event study graphs are stored
-global topdir "S:\LARC\transfer"
+*global topdir "S:\LARC\transfer" use this when encountering errors writing to local drive... not sure why that happens
 global analysis_data_path "S:/LARC/data/analysis_data"
 global log_path "S:/LARC/log_files"
 **********************************************************************************************************************************************
@@ -290,7 +290,7 @@ foreach birth_order in order_two_plus { //order_first order_two_plus{
 			* end 7 **************************************************************************************
 			
 			*** Drop each STATE, one by one and re-run event studies:
-			local state_list state_short CA CO DE DC GA ID IL IN IA LA MD MT NM NY OK RI SC TX WA WY // this is list of states that have sparate device reimbursement in data
+			local state_list CA CO DE DC GA ID IL IN IA LA MD MT NM NY OK RI SC TX WA WY // this is list of states that have sparate device reimbursement in data
 			
 			foreach state of local state_list {
 				* start 8 **************************************************************************************

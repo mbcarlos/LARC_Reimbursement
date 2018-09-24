@@ -18,7 +18,7 @@ set more off
 ** Make sure \\tsclient\Dropbox (Personal) is mapped to B: drive (subst B: "\\tsclient\Dropbox (Personal)")
 global topdir "B:\Cornell\Research\Projects\LARC_Reimbursement\graphs\event_studies" // path to directory where event study graphs are stored
 *** If B: is mapped to Dropbox/Cornell/Research/Projects/LARC_Reimbursement:
-global topdir "B:\graphs\event_studies" // path to directory where event study graphs are stored
+global topdir "B:\graphs\event_studies\balanced_panel" // path to directory where event study graphs are stored
 global analysis_data_path "S:/LARC/data/analysis_data"
 global log_path "S:/LARC/log_files"
 **********************************************************************************************************************************************
@@ -27,13 +27,20 @@ global log_path "S:/LARC/log_files"
 cd "${topdir}"
 capture mkdir "${S_DATE}" // creates new folder for new date in event study graphs folder
 cd "${S_DATE}"
-log using "${log_path}/event_studies_log_births_${S_DATE}.log", replace text
+log using "${log_path}/event_studies_log_births_balanced_${S_DATE}.log", replace text
 
 
 
 local quarter_type ldq
-local birth_prefixes lbw natality
-local birth_suffixes hsorless total unmarried teen 
+*forvalues policy_cutoff_value = 2/8 {
+local max_policy_time_diff_cutoff 6 // `policy_cutoff_value' // cutoff for number of post-periods (will change the number of states making up the event study)
+*** Variable for the number of months/quarters before policy to cut off graphs at:
+local num_t_lower_cutoff = -8
+local num_t_upper_cutoff = `max_policy_time_diff_cutoff'
+
+
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried hsorless
 local quarter_datasets_order_first
 *local month_datasets_order_first // NOT DOING MONTH ANYMORE
 
@@ -63,8 +70,8 @@ foreach prefix of local birth_prefixes {
 
 
 *Set locals for list of quarter/month datasets when birth order is 2nd or greater:
-local birth_prefixes natality lbw
-local birth_suffixes hsorless total unmarried teen 
+local birth_prefixes natality lbw 
+local birth_suffixes total teen unmarried hsorless
 foreach prefix of local birth_prefixes {
 	foreach suffix of local birth_suffixes {
 		capture confirm file "${analysis_data_path}/`prefix'_`suffix'_`quarter_type'_C2.dta"
@@ -106,11 +113,7 @@ foreach birth_order in order_first order_two_plus{
 			display "--------------------------------------------------"
 			display "--------------------------------------------------"
 			use "${analysis_data_path}/`dataset_orig'.dta", clear
-			display "USING: ${analysis_data_path}/`dataset_orig'.dta"
 			
-			/*if "`dataset_orig'" == "lbw_teen_ldq_C2" { // these are the states with lots of small cell censoring, deleting them doesnt make a huge difference
-				drop if inlist(state_short,"DC","DE","IA","ID","MT","NM","RI","WA","WY") // DELETE DELETE DELETE DLEETE DELETE DELETE 
-			}*/
 			*** Generate a dataset local that takes the C2 off of the end of the dataset name:
 			*** Only need to do this if `birth_order'=order_two_plus
 			/*if "`birth_order'"=="order_two_plus" {
@@ -130,10 +133,6 @@ foreach birth_order in order_first order_two_plus{
 			* start 1 **************************************************************************************
 			***Variables differ according to which dataset we are using - check the dataset and set locals accordingly:
 			if "`time_period'"=="quarter" {
-				*** Variable for the number of months/quarters before policy to cut off graphs at:
-				local num_t_lower_cutoff = -8
-				local num_t_upper_cutoff = 8
-				
 				if "`quarter_type'"=="ldq" {
 					local current_date_var lastday_q
 				}
@@ -158,9 +157,6 @@ foreach birth_order in order_first order_two_plus{
 				local date_enacted_var date_enacted_9molag
 				local outcome_var births
 			}
-			
-			*gen missing_outcome = (`outcome_var'==.) // DELETE DELETE DELETE DELETE DELETE DELETE 
-			*replace `outcome_var' = 5 if `outcome_var' == . // DELETE DELETE DELETE DELETE DELETE DELETE 
 			
 			* end 1 ***************************************************************************************
 
@@ -213,7 +209,7 @@ foreach birth_order in order_first order_two_plus{
 			**** Drop states where date enacted is after the end of data, i.e. we don't observe any post-period for the state. 
 			**** This will drop any observations for state that we only have "pre" periods for, as well as any states that 
 			**** never adopt:
-			drop if separate_device_reimb_indata==0 
+			drop if separate_device_reimb_indata==0
 			* end 3 **************************************************************************************
 			
 			* start 4 **************************************************************************************
@@ -299,11 +295,40 @@ foreach birth_order in order_first order_two_plus{
 			}
 			* end 7 **************************************************************************************
 			
+			*******************************************************************************************************
+			*************************************** BALANCING THE PANEL *******************************************
+			*******************************************************************************************************
+			cap drop group_state max_policy_time_diff min_policy_time_diff
+			qui egen group_state = group(state) if separate_device_reimb_indata==1
+			qui gen max_policy_time_diff = .
+			qui gen min_policy_time_diff = .
+
+			qui sum group_state
+			forvalues i = 1/`r(max)' {
+				cap drop tag 
+				qui egen tag=tag(group_state) if group_state==`i'
+				gsort - tag
+				local state = state[1]
+				
+				qui sum policy_time_diff if group_state == `i'
+				qui replace max_policy_time_diff = `r(max)' if group_state == `i'
+				qui replace min_policy_time_diff = `r(min)' if group_state == `i'
+				display "** `state' ** number of pre-periods: `r(min)' number of post-periods: `r(max)'"
+			}
+
+			keep if max_policy_time_diff >= `max_policy_time_diff_cutoff'
+			* Drop observations before e.g. 8 quarter before policy or more than 8 quarters after (for balanced panel): 
+			keep if policy_time_diff >= `num_t_lower_cutoff' & policy_time_diff <= `num_t_upper_cutoff'
+			display "keep if policy_time_diff >= `num_t_lower_cutoff' & policy_time_diff <= `num_t_upper_cutoff'"
+			*******************************************************************************************************
+			*******************************************************************************************************
+			*******************************************************************************************************
 			* start 8 **************************************************************************************
 			* Run regression to generate event study graphs:
 
 			*reg log_`outcome_var' t_* i.`time_period' i.year i.state_num  if separate_device_reimb_indata==1, noomitted cluster(state_num)
 			reg log_`outcome_var' t_* i.`time_period'##i.year i.state_num medicaid_expanded unemployment_rate_1yrlag if separate_device_reimb_indata==1, noomitted cluster(state_num)
+			*reg log_`outcome_var' t_* i.`time_period'##i.year i.state_num medicaid_expanded unemployment_rate_1yrlag if separate_device_reimb_indata==1, noomitted robust
 
 			* end 8 **************************************************************************************
 			
@@ -419,18 +444,31 @@ foreach birth_order in order_first order_two_plus{
 			*** Count the number of state-quarter/month obs that are missing among the states that have device reimbursement in 
 			* dataset time period:
 			qui count if `outcome_var'==. & separate_device_reimb_indata==1
-			*qui count if missing_outcome == 1 & separate_device_reimb_indata==1 // DELETE DELETE DELETE 
 			local num_missing_state_time_obs = r(N)
 			qui count if separate_device_reimb_indata==1
 			local num_total_state_time_obs = r(N)
 			local pct_missing_state_time_obs = round((`num_missing_state_time_obs'/`num_total_state_time_obs')*100,1)
 			
+			*** Get list of states to put in graph notes: 
+			local state_list_graph_notes
+			qui egen state_tag = tag(state_short)
+			gsort - state_tag - max_policy_time_diff
+			qui sum state_tag
+			forvalues i = 1/`r(sum)' {
+				local add_state = state_short[`i']
+				if `i'==1 {
+					local state_list_graph_notes "`add_state'"
+				}
+				else {
+					local state_list_graph_notes "`state_list_graph_notes', `add_state'"
+				}
+			}
 			
 			twoway ///
 				(scatter beta tdiff if tdiff!=., m(circle) mc(gs9) ///
 				legend(off) xline(-1) yline(0) xmtick(`min'(1)`max') xlabel(`min'(2)`max') ///
 				ytitle("log(`outcome_var')") xtitle("Time Since Policy (`time_period's)") ///
-				title("`title_line1'" "`title_line2'") subtitle("`subtitle'") ///
+				title("`title_line1' (balanced panel)" "`max_policy_time_diff_cutoff' post quarters, `num_states_indata' states") subtitle("`subtitle'") ///
 				note("Notes: " ///
 				"  - Whiskers are 95% confidence intervals" ///
 				"  - Standard errors clustered at the state level" ///
@@ -438,12 +476,13 @@ foreach birth_order in order_first order_two_plus{
 				"  - Observations more than `max' `time_period's after policy are included in the `max' indicator" ///
 				"  - Regression includes controls for date of Medicaid expansion and lagged unemployment rate" ///
 				"  - `num_states_indata' states have separate device reimbursement during data time period" ///
+				"         (`state_list_graph_notes')" ///
 				"  - `num_missing_state_time_obs' out of `num_total_state_time_obs' state-`time_period's missing due to small cell censoring (`pct_missing_state_time_obs'%)" ///
 				"  - `policy_lag_note'" ///
 				"`merge_notes'")) ///
 				(rcap upperlimit lowerlimit tdiff, lc(gs9))
 			****NOTE: If adding more notes to graph make sure to add them BEFORE "`merge_notes'" becuase merge_notes local is empty for month datasets which cutoffs comments after
-			graph export `dataset_orig'_`time_period'_ES.pdf, replace
+			graph export `dataset_orig'_`time_period'_ES_`max_policy_time_diff_cutoff'postperiods.pdf, replace
 			* end 10 **************************************************************************************
 			
 			display "--------------------------------------------------"
@@ -451,5 +490,6 @@ foreach birth_order in order_first order_two_plus{
 		}
 	}
 }
-
+//}
+display "keep if policy_time_diff >= `num_t_lower_cutoff' & policy_time_diff <= `num_t_upper_cutoff'"
 log close

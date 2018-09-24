@@ -18,7 +18,7 @@ set more off
 ** Make sure \\tsclient\Dropbox (Personal) is mapped to B: drive (subst B: "\\tsclient\Dropbox (Personal)")
 global topdir "B:\Cornell\Research\Projects\LARC_Reimbursement\graphs\event_studies" // path to directory where event study graphs are stored
 *** If B: is mapped to Dropbox/Cornell/Research/Projects/LARC_Reimbursement:
-global topdir "B:\graphs\event_studies" // path to directory where event study graphs are stored
+global topdir "B:\graphs\event_studies\balanced_panel" // path to directory where event study graphs are stored
 global analysis_data_path "S:/LARC/data/analysis_data"
 global log_path "S:/LARC/log_files"
 **********************************************************************************************************************************************
@@ -27,11 +27,16 @@ global log_path "S:/LARC/log_files"
 cd "${topdir}"
 capture mkdir "${S_DATE}" // creates new folder for new date in event study graphs folder
 cd "${S_DATE}"
-log using "${log_path}/event_studies_larc_use_log_${S_DATE}.log", replace text
+log using "${log_path}/event_studies_larc_use_balanced_log_${S_DATE}.log", replace text
 
 
 local quarter_type ldq
-
+local max_policy_time_diff_cutoff = 6 // dont do: 3 (same as 4), cutoff for number of post-periods (will change the number of states making up the event study)
+*** cut-off data 2 years before policy (8 quarters):
+*** Variable for the number of months/quarters before policy to cut off graphs at:
+**** Set local for number of time periods to cut off at before/after policy:
+local num_t_lower_cutoff = -8
+local num_t_upper_cutoff = `max_policy_time_diff_cutoff' //8
 
 use "${analysis_data_path}/larc_utilization_`quarter_type'.dta", clear
 
@@ -43,11 +48,7 @@ if "`quarter_type'"=="fdq" {
 	local current_date_var firstday_q
 }
 
-*** cut-off data 2 years before policy (8 quarters):
-*** Variable for the number of months/quarters before policy to cut off graphs at:
-**** Set local for number of time periods to cut off at before/after policy:
-local num_t_lower_cutoff = -8
-local num_t_upper_cutoff = 8
+
 
 local date_enacted_var date_enacted_9molag
 
@@ -102,7 +103,7 @@ forvalues i = 1/`r(max)' {
 **** Drop states where date enacted is after the end of data, i.e. we don't observe any post-period for the state. 
 **** This will drop any observations for states that we only have "pre" periods for, as well as any states that 
 **** never adopt:
-drop if separate_device_reimb_indata==0
+*drop if separate_device_reimb_indata==0
 * end 3 **************************************************************************************
 
 
@@ -175,6 +176,34 @@ if `N'<=`max' {
 }
 * end 6 **************************************************************************************
 
+*******************************************************************************************************
+*************************************** BALANCING THE PANEL *******************************************
+*******************************************************************************************************
+cap drop group_state max_policy_time_diff min_policy_time_diff
+qui egen group_state = group(state) if separate_device_reimb_indata==1
+qui gen max_policy_time_diff = .
+qui gen min_policy_time_diff = .
+
+qui sum group_state
+forvalues i = 1/`r(max)' {
+	cap drop tag 
+	qui egen tag=tag(group_state) if group_state==`i'
+	gsort - tag
+	local state = state[1]
+	
+	qui sum policy_time_diff if group_state == `i'
+	qui replace max_policy_time_diff = `r(max)' if group_state == `i'
+	qui replace min_policy_time_diff = `r(min)' if group_state == `i'
+	display "** `state' ** number of pre-periods: `r(min)' number of post-periods: `r(max)'"
+}
+
+keep if max_policy_time_diff >= `max_policy_time_diff_cutoff'
+* Drop observations before e.g. 8 quarter before policy or more than 8 quarters after (for balanced panel): 
+keep if policy_time_diff >= `num_t_lower_cutoff' & policy_time_diff <= `num_t_upper_cutoff'
+*******************************************************************************************************
+*******************************************************************************************************
+*******************************************************************************************************
+
 
 * start 8 **************************************************************************************
 * Run regression to generate event study graphs:
@@ -228,12 +257,27 @@ qui sum tag_states_sep_reimb
 local num_states_indata = r(max)
 local lower_cutoff_label = `num_t_lower_cutoff'*-1
 
+*** Get list of states to put in graph notes:
+qui egen state_tag = tag(state_short) if separate_device_reimb_indata==1
+gsort - state_tag - max_policy_time_diff
+qui sum state_tag
+forvalues i = 1/`r(sum)' {
+	local add_state = state_short[`i']
+	if `i'==1 {
+		local state_list_graph_notes "`add_state'"
+	}
+	else {
+		local state_list_graph_notes "`state_list_graph_notes', `add_state'"
+	}
+}
+
+
 
 twoway ///
 	(scatter beta tdiff if tdiff!=., m(circle) mc(gs9) ///
 	legend(off) xline(-1) yline(0) xmtick(`num_t_lower_cutoff'(1)`num_t_upper_cutoff') xlabel(`num_t_lower_cutoff'(2)`num_t_upper_cutoff') ///
 	ytitle("log(larc_count)") xtitle("Time Since Policy (quarters)") ///
-	title("LARC Use in Medicaid") ///
+	title("LARC Use in Medicaid (balanced panel)" "`max_policy_time_diff_cutoff' post quarters, `num_states_indata' states") ///
 	note("Notes: " ///
 	"  - Whiskers are 95% confidence intervals" ///
 	"  - Standard errors clustered at the state level" ///
@@ -241,10 +285,11 @@ twoway ///
 	"  - Observations more than `num_t_upper_cutoff' quarters after policy are included in the `num_t_upper_cutoff' indicator" ///
 	"  - Regression includes controls for date of Medicaid expansion and lagged unemployment rate" ///
 	"  - `num_states_indata' states have separate device reimbursement during data time period" ///
+	"         (`state_list_graph_notes')" ///
 	"  - t=0 inidicates the quarter in which the policy went into effect")) ///
 	(rcap upperlimit lowerlimit tdiff, lc(gs9))
 ****NOTE: If adding more notes to graph make sure to add them BEFORE "`merge_notes'" becuase merge_notes local is empty for month datasets which cutoffs comments after
-graph export larc_utilization_quarterly_ES.pdf, replace
+graph export larc_utilization_quarterly_ES_`max_policy_time_diff_cutoff'postperiods.pdf, replace
 * end 10 *************************************************************************************
 
 

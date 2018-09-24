@@ -13,7 +13,7 @@ Author: Marisa Carlos (mbc96@cornell.edu)
 %let prefixes = lbw lt37weeks_lmp lt37weeks_oe natality;
 %let suffixes = black hispanic teen total unmarried;
 */
-*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+/*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
 %let prefixes = lbw natality;
 %let suffixes = teen total unmarried;
 ****************************************************************************************************************************************************
@@ -248,7 +248,7 @@ proc sql noprint;
 quit;
 %mend rollup_birth_data;
 %rollup_birth_data;
-
+*/
 
 ****************************************************************************************************************************************************
 ****************************************** IMPORT MONTHLY BIRTH DATA, 2nd+ BIRTH ORDER *************************************************************
@@ -258,7 +258,7 @@ quit;
 %let suffixes = black hispanic teen total unmarried;
 */
 
-*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
+/*9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
 %let prefixes = lbw natality;
 %let suffixes = teen total unmarried;
 
@@ -332,15 +332,18 @@ proc sql noprint;
 quit;
 %mend import_monthly_data_secondchild;
 %import_monthly_data_secondchild(syear=&first_year_birth_data.,eyear=&last_year_birth_data.);
+*/
 
-
+*"natality lbw" "all teen unmarried HSorless"
 
 ****************************************************************************************************************************************************
 ****************************************** IMPORT QUARTERLY BIRTH DATA, 2nd+ BIRTH ORDER ***********************************************************
 ****************************************************************************************************************************************************;
 *%let datasets = lt37weeks_oe_teen lt37weeks_lmp_hispanic lbw_hispanic natality_black lt37weeks_lmp_teen lbw_teen lt37weeks_oe_hispanic;
 *9/14/2018: Getting rid of black/hispanic stratification and premature estimates; 
-%let datasets = lbw_teen lbw_HSorless natality_HSorless;
+*%let datasets = lbw_teen lbw_HSorless natality_HSorless;*9/23/18: downloaded all data at quarterly level to get rid of small cell issues;
+%let datasets = natality_all natality_teen natality_unmarried natality_HSorless lbw_all lbw_teen lbw_unmarried lbw_HSorless; 
+
 %macro import_quarter_data_childtwo(syear=,eyear=);
 %do i = 1 %to %sysfunc(countw(&datasets.));
 	%let dataset = %scan(&datasets., &i.);
@@ -431,7 +434,7 @@ quit;
 
 
 
-****************************************************************************************************************************************************
+/****************************************************************************************************************************************************
 ******************************************* ROLL UP MONTHLY TO QUARTERLY (2nd+ BIRTH ORDER) ********************************************************
 ****************************************************************************************************************************************************;
 *%let C2_rollup_datasets = lt37weeks_oe_unmarried lbw_unmarried lt37weeks_lmp_total natality_total lbw_total natality_unmarried 
@@ -495,3 +498,4 @@ proc sql noprint;
 quit;
 %mend rollup_birth_data_childtwo;
 %rollup_birth_data_childtwo;
+*/

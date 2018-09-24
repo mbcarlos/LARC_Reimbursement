@@ -31,7 +31,7 @@ libname savedata "S:\LARC\data\analysis_data";
 *%let larc_policy_spreadsheet_path = B:\Cornell\Research\Projects\LARC_Reimbursement\state_larc_policies_2018_04_09.csv;
 %let sas_code_path = B:\Cornell\Research\Projects\LARC_Reimbursement\code\data_cleaning\;
 *** IF CONNECTED TOP FOLDER (LARC_Reimbursement): subst B: "\\tsclient\\LARC_Reimbursement";
-%let larc_policy_spreadsheet_path = B:\state_larc_policies_2018_09_14.csv;
+%let larc_policy_spreadsheet_path = B:\state_larc_policies_2018_09_20.csv;
 %let sas_code_path = B:\code\data_cleaning\;
 %let LARC_data_path_pipe = 'dir "B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\*.xlsx" /b';
 %let LARC_data_path =  B:\Data\LARC_data_from_medicaid_offices\complete\formatted_data\;
